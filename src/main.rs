@@ -3,7 +3,7 @@ extern crate swc_ecma_parser;
 extern crate swc_ecma_visit;
 
 use std::env;
-use std::fmt::Display;
+use std::fmt::{format, Display};
 use std::path::Path;
 
 use swc_common::sync::Lrc;
@@ -18,7 +18,7 @@ use swc_ecma_visit::swc_ecma_ast::{
 };
 use swc_ecma_visit::{VisitAll, VisitAllWith};
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 enum Dep {
     Require(String),
     ImportDefault {
@@ -35,21 +35,23 @@ enum Dep {
 }
 
 struct Visitor {
-    deps: Vec<Dep>,
-    path: String, // full path relative to entrypoint
+    full_rel_path: String, // full path to visited file, relative to entrypoint
+                           // dep_name: String,      // name or path used when importing/requiring in source code
 }
 
 impl Visitor {
     fn new(path: String) -> Visitor {
         Visitor {
-            deps: Vec::new(),
-            path,
+            full_rel_path: path,
+            // dep_name: String::from(""),
         }
     }
 
     fn visit(&mut self) {
         let cm: Lrc<SourceMap> = Default::default();
-        let fm = cm.load_file(Path::new(&self.path)).expect("Couldn't open");
+        let fm = cm
+            .load_file(Path::new(&self.full_rel_path))
+            .expect("Couldn't open");
         let lexer = Lexer::new(
             Syntax::Es(Default::default()),
             Default::default(),
@@ -67,6 +69,36 @@ impl Visitor {
             .expect("failed to parse module");
 
         module.visit_all_with(self)
+    }
+
+    // get full_rel_path of another module imported/required from the current one.
+    fn resolve_require(&mut self, dep_name: String) -> String {
+        let curr_dir = Path::new(&self.full_rel_path).parent();
+
+        fn load_as_file() {}
+
+        if dep_name.starts_with("./") {
+            let full_rel_path = Path::new(&self.full_rel_path).join(&dep_name).to_owned();
+
+            if full_rel_path.is_dir() {
+                println!("Importing directory: {}", full_rel_path.display());
+            } else if full_rel_path.is_file() {
+                println!("Importing file: {}", full_rel_path.display())
+            } else {
+                panic!("Couldn't read dep: {}", dep_name)
+            }
+
+            String::from(
+                full_rel_path
+                    .to_str()
+                    .expect("Couldn't parse resolve path for "),
+            )
+        } else {
+            panic!(
+                "Including from node_modules is not yet supported. ({})",
+                dep_name
+            )
+        }
     }
 }
 
@@ -91,7 +123,12 @@ impl VisitAll for Visitor {
                             raw: _,
                         })) = &*call.args[0].expr
                         {
-                            println!("Requiring {}", name)
+                            println!("Requiring {}", name);
+
+                            println!(
+                                "Resolves to {}",
+                                self.resolve_require(String::from(name.to_string()))
+                            );
                         }
                     }
                 }

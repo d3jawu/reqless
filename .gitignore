@@ -1,2 +1,5 @@
-/target
-/scratch
+node_modules/
+
+scratch/
+
+build/

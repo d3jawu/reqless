@@ -28,7 +28,7 @@ const visitModule = (absPath): string => {
   const require = createRequire(absPath);
   class CollectDeps extends Visitor {
     visitImportDeclaration(n: ImportDeclaration): ImportDeclaration {
-      return n;
+      throw new Error("Import not yet implemented");
     }
 
     visitCallExpression(exp: CallExpression): Expression {
@@ -62,6 +62,7 @@ const visitModule = (absPath): string => {
         });
       }
 
+      // arg.value = depAbsPath;
       return exp;
     }
   }
@@ -69,12 +70,18 @@ const visitModule = (absPath): string => {
   const file = readFileSync(absPath).toString();
 
   return transformSync(file, {
+    jsc: {
+      parser: {
+        syntax: "typescript",
+      },
+      target: "es2020",
+    },
     plugin: (m) => new CollectDeps().visitProgram(m),
   }).code;
 };
 
 // seed deps with entrypoint deps
-visitModule(entryPoint);
+const transformedEntrypoint = visitModule(entryPoint);
 
 while (true) {
   const unvisitedDeps = deps.filter(({ visited }) => !visited);
@@ -84,9 +91,11 @@ while (true) {
   }
 
   unvisitedDeps.forEach((dep) => {
-    visitModule(dep.absPath);
+    const transformed = visitModule(dep.absPath);
     dep.visited = true;
   });
 }
+
+const req = ``;
 
 console.log(deps);

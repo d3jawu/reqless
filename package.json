@@ -22,7 +22,7 @@
     "typescript": "^4.7.2"
   },
   "dependencies": {
-    "swc": "^1.0.11",
+    "@swc/core": "^1.2.196",
     "ts-pattern": "^4.0.2"
   },
   "type": "module"

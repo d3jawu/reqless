@@ -6,11 +6,11 @@ import {
 } from "@swc/core";
 import { Visitor } from "@swc/core/Visitor.js";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve as fullPath } from "node:path";
 import { createRequire } from "node:module";
 import { match } from "ts-pattern";
 
-const entryPoint = resolve(process.argv[2]);
+const entryPoint = fullPath(process.argv[2]);
 if (!entryPoint) {
   throw new Error("No entrypoint specified");
 }
@@ -26,6 +26,25 @@ const deps: Dep[] = [];
 // collect a module's dependencies and return a transformed version of the module
 const visitModule = (absPath): string => {
   const require = createRequire(absPath);
+  const resolve = (depName: string) => {
+    const tryNames = (function* () {
+      yield depName + ".ts";
+      yield depName + "/index.ts";
+    })();
+
+    let tryName = depName;
+    while (true) {
+      try {
+        return require.resolve(tryName);
+      } catch (err) {
+        tryName = tryNames.next().value || "";
+        if (!tryName) {
+          throw new Error(`Couldn't resolve: ${depName}`);
+        }
+      }
+    }
+  };
+
   class CollectDeps extends Visitor {
     visitImportDeclaration(n: ImportDeclaration): ImportDeclaration {
       throw new Error("Import not yet implemented");
@@ -52,17 +71,18 @@ const visitModule = (absPath): string => {
 
       const { value: path } = arg;
 
-      const depAbsPath = require.resolve(path);
+      const depAbsPath = resolve(path);
 
       if (!deps.some(({ absPath }) => absPath === depAbsPath)) {
         deps.push({
           kind: "require",
-          absPath: require.resolve(path),
+          absPath: depAbsPath,
           visited: false,
         });
       }
 
-      // arg.value = depAbsPath;
+      callee.value = "_require";
+      arg.value = depAbsPath;
       return exp;
     }
   }

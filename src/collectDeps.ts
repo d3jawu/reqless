@@ -15,6 +15,13 @@ import {
   ObjectPattern,
   Identifier,
   ExpressionStatement,
+  AssignmentExpression,
+  ExportSpecifier,
+  ExportNamedDeclaration,
+  NamedExportSpecifier,
+  KeyValueProperty,
+  ExportDefaultDeclaration,
+  ExportDefaultExpression,
 } from "@swc/core";
 import { Visitor } from "@swc/core/Visitor.js";
 
@@ -53,7 +60,9 @@ const collectDeps = (
         } catch (err) {
           tryName = tryNames.next().value || "";
           if (!tryName) {
-            throw new Error(`Couldn't resolve: ${depName}`);
+            throw new Error(
+              `Couldn't resolve: ${depName} imported from ${absPath}`
+            );
           }
         }
       }
@@ -160,8 +169,162 @@ const collectDeps = (
         });
       }
 
+      visitExportDefaultExpression(
+        dec: ExportDefaultExpression
+      ): ExpressionStatement {
+        return {
+          type: "ExpressionStatement",
+          span,
+          expression: {
+            type: "AssignmentExpression",
+            span,
+            operator: "=",
+            left: {
+              type: "MemberExpression",
+              span,
+              object: {
+                type: "Identifier",
+                span,
+                value: "module",
+                optional: false,
+              },
+              property: {
+                type: "Identifier",
+                span,
+                value: "exports",
+                optional: false,
+              },
+            },
+            right: {
+              type: "ObjectExpression",
+              span,
+              properties: [
+                {
+                  type: "SpreadElement",
+                  spread: span,
+                  arguments: {
+                    type: "MemberExpression",
+                    span,
+                    object: {
+                      type: "Identifier",
+                      span,
+                      value: "module",
+                      optional: false,
+                    },
+                    property: {
+                      type: "Identifier",
+                      span,
+                      value: "exports",
+                      optional: false,
+                    },
+                  },
+                },
+                {
+                  type: "KeyValueProperty",
+                  key: {
+                    type: "StringLiteral",
+                    span,
+                    value: "default",
+                    hasEscape: false,
+                    kind: {
+                      type: "normal",
+                      containsQuote: true,
+                    },
+                  },
+                  value: dec.expression,
+                },
+              ],
+            },
+          },
+        };
+      }
+
+      visitExportNamedDeclaration(
+        dec: ExportNamedDeclaration
+      ): ExpressionStatement {
+        const { specifiers } = dec;
+
+        const exports: {
+          name: string;
+          as: string;
+        }[] = specifiers.map((spec: NamedExportSpecifier) => {
+          const {
+            orig: { value: name },
+          } = spec;
+
+          return {
+            name,
+            as: spec.exported ? spec.exported.value : name,
+          };
+        });
+
+        return {
+          type: "ExpressionStatement",
+          span,
+          expression: {
+            type: "AssignmentExpression",
+            span,
+            operator: "=",
+            left: {
+              type: "MemberExpression",
+              span,
+              object: {
+                type: "Identifier",
+                span,
+                value: "module",
+                optional: false,
+              },
+              property: {
+                type: "Identifier",
+                span,
+                value: "exports",
+                optional: false,
+              },
+            },
+            right: {
+              type: "ObjectExpression",
+              span,
+              properties: [
+                {
+                  type: "SpreadElement",
+                  spread: span,
+                  arguments: {
+                    type: "MemberExpression",
+                    span,
+                    object: {
+                      type: "Identifier",
+                      span,
+                      value: "module",
+                      optional: false,
+                    },
+                    property: {
+                      type: "Identifier",
+                      span,
+                      value: "exports",
+                      optional: false,
+                    },
+                  },
+                },
+                ...exports.map(({ name, as }) => {
+                  if (name === as) {
+                    return identifier(name);
+                  } else {
+                    return {
+                      type: "KeyValueProperty",
+                      span,
+                      key: identifier(as),
+                      value: identifier(name),
+                    } as KeyValueProperty;
+                  }
+                }),
+              ],
+            },
+          },
+        };
+      }
+
       visitExportDeclaration(dec: ExportDeclaration): ModuleDeclaration {
-        return dec;
+        throw new Error("Variable exports not yet implemented.");
       }
 
       visitCallExpression(exp: CallExpression): Expression {
@@ -169,6 +332,10 @@ const collectDeps = (
         const { callee, arguments: args } = exp;
 
         if (callee.type !== "Identifier") {
+          return exp;
+        }
+
+        if (callee.value !== "require") {
           return exp;
         }
 

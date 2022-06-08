@@ -26,8 +26,8 @@ import {
 import { Visitor } from "@swc/core/Visitor.js";
 
 const span: Span = {
-  start: 0,
-  end: 0,
+  start: 1,
+  end: 1,
   ctxt: 0,
 };
 

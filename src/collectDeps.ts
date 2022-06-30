@@ -323,8 +323,73 @@ const collectDeps = (
         };
       }
 
-      visitExportDeclaration(dec: ExportDeclaration): ModuleDeclaration {
-        throw new Error("Variable exports not yet implemented.");
+      visitExportDeclaration(dec: ExportDeclaration): Declaration {
+        const { declaration } = dec;
+        const { type } = declaration;
+
+        if (type === "VariableDeclaration") {
+          const { declarations, kind } = declaration;
+
+          console.log(declarations);
+
+          return {
+            type: "VariableDeclaration",
+            span,
+            kind,
+            declarations: declarations.map(({ id, init }) => {
+              if (id.type !== "Identifier") {
+                throw new Error(`Not yet supported: export ${id.type}`);
+              }
+
+              return {
+                type: "VariableDeclarator",
+                span,
+                id,
+                init: {
+                  type: "ParenthesisExpression",
+                  span,
+                  expression: {
+                    type: "AssignmentExpression",
+                    span,
+                    operator: "=",
+                    left: {
+                      type: "MemberExpression",
+                      span,
+                      object: {
+                        type: "MemberExpression",
+                        span,
+                        object: {
+                          type: "Identifier",
+                          span,
+                          value: "module",
+                          optional: false,
+                        },
+                        property: {
+                          type: "Identifier",
+                          span,
+                          value: "exports",
+                          optional: false,
+                        },
+                      },
+                      property: {
+                        type: "Computed",
+                        span,
+                        expression: {
+                          type: "StringLiteral",
+                          span,
+                          value: id.value,
+                        },
+                      },
+                    },
+                    right: init,
+                  },
+                },
+              };
+            }),
+          };
+        } else {
+          throw new Error(`Not yet implemented: ${type}`);
+        }
       }
 
       visitCallExpression(exp: CallExpression): Expression {

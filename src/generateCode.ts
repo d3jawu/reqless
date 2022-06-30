@@ -11,7 +11,7 @@ const _dep = (dep) => (
 
       return `
       "${absPath}": () => {
-        const module = { exports: null }
+        const module = { exports: {} }
 
         ${transformed}
 
